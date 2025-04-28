@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rekap Hasil Ujian per Ruangan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f8fafc;
+    }
+    
+    .filter-btn {
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .filter-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .filter-btn.active {
+      background-color: #1e40af;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .search-input {
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .search-input:focus {
+      box-shadow: 0 4px 10px rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+    }
+    
+    .table-container {
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    
+    th {
+      position: sticky;
+      top: 0;
+      background-color: #3b82f6;
+      color: white;
+      font-weight: 500;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f8fafc;
+    }
+    
+    tr:hover {
+      background-color: #eff6ff;
+    }
+    
+    .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .footer-wave {
+      height: 80px;
+      background-color: #3b82f6;
+      position: relative;
+    }
+    
+    .footer-wave::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: -30px;
+      height: 30px;
+      background-size: 50px 100%;
+      background-image: radial-gradient(circle at 25px -15px, transparent 50px, #3b82f6 51px);
+    }
+    
+    .sync-btn {
+      transition: all 0.3s ease;
+    }
+    
+    .sync-btn:hover {
+      transform: rotate(360deg);
+    }
+    
+    .sync-btn.syncing {
+      animation: spin 1s linear infinite;
+    }
+    
+    .export-btn {
+      transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Header with School Logo -->
+  <header class="bg-white shadow-sm">
+    <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <img src="https://i.ibb.co.com/3YjdDh2N/logo-sekolah-FINAL.png" alt="Logo Sekolah" class="h-16 w-16 object-contain">
+        <div>
+          <h1 class="text-xl font-bold text-gray-800">SMP Negeri 1 Sukasada</h1>
+          <p class="text-sm text-gray-600">TRY-OUT 2025</p>
+        </div>
+      </div>
+      <div class="hidden md:flex items-center space-x-4">
+        <div class="flex items-center space-x-2 text-blue-600">
+          <i class="fas fa-calendar-alt"></i>
+          <span id="current-date" class="font-medium"></span>
+        </div>
+        <div class="flex items-center space-x-2 text-gray-600">
+          <i class="fas fa-sync-alt"></i>
+          <span id="last-sync" class="text-sm">Belum disinkron</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow container mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Rekap Hasil TRY-OUT</h1>
+        <p class="text-gray-600">Pantau hasil ujian siswa per ruangan secara real-time</p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+        <div class="flex items-center space-x-3">
+          <button id="syncButton" class="sync-btn bg-blue-600 text-white p-3 rounded-full shadow-md hover:bg-blue-700">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          <span class="text-sm text-gray-600 hidden md:block">SINKRONKAN DATA</span>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button id="exportButton" class="export-btn bg-green-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-700 flex items-center space-x-2">
+            <i class="fas fa-file-export"></i>
+            <span>Export Excel</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading Indicator -->
+      <div id="loading" class="loading flex items-center justify-center space-x-2 py-4 hidden">
+        <div class="loading-spinner h-6 w-6 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+        <span class="text-gray-600">Mengambil data...</span>
+      </div>
+
+      <!-- Subject Buttons -->
+      <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+          <i class="fas fa-book mr-2 text-blue-500"></i> Mata Pelajaran
+        </h2>
+        <div class="button-group flex flex-wrap gap-2" id="mapelButtonGroup"></div>
+      </div>
+
+      <!-- Room Buttons -->
+      <div class="bg-white rounded-xl shadow-md p-4 mb-6" id="ruanganButtonGroup" style="display: none;">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3 flex items-center">
+          <i class="fas fa-door-open mr-2 text-blue-500"></i> Ruangan Ujian
+        </h2>
+        <div class="button-group flex flex-wrap gap-2" id="ruanganButtonsContainer"></div>
+      </div>
+
+      <!-- Search Box -->
+      <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+        <div class="max-w-md mx-auto relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i class="fas fa-search text-gray-400"></i>
+          </div>
+          <input type="text" id="searchInput" placeholder="Cari nama peserta..." 
+                 class="search-input pl-10 w-full py-2 px-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="table-container bg-white rounded-xl overflow-hidden mb-8">
+        <div class="overflow-x-auto">
+          <table id="rekapTable" class="w-full">
+            <thead>
+              <tr>
+                <th class="py-3 px-4 text-left">Ruangan</th>
+                <th class="py-3 px-4 text-left">Kelas</th>
+                <th class="py-3 px-4 text-left">Nama</th>
+                <th class="py-3 px-4 text-left">Mapel</th>
+                <th class="py-3 px-4 text-left">Nilai</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Total Participants -->
+      <div id="totalParticipants" class="bg-white rounded-xl shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+          <i class="fas fa-users mr-2 text-blue-500"></i> Rekap Peserta per Ruangan
+        </h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="ruanganStats"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto">
+    <div class="footer-wave"></div>
+    <div class="bg-blue-600 text-white py-6">
+      <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+          <div class="mb-4 md:mb-0">
+            <h3 class="text-lg font-semibold">SMP Negeri 1 Sukasada</h3>
+            <p class="text-blue-100">Jl. Jelantik Gingsir No. 26, Sukasada</p>
+          </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-blue-500 text-center text-sm text-blue-100">
+          <p>&copy; 2025 | SMP Negeri 1 Sukasada | Gede Pujana</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbwQpWnrugu68bANcv2zqWoiwWogIR-4Kf_opOr9FuaOBdDKMnbC6lpTZhq1RYOpeb4wTg/exec';
+    let allData = [];
+    let selectedMapel = null;
+    let selectedRuangan = null;
+    let lastSyncTime = null;
+
+    // Set current date
+    document.addEventListener('DOMContentLoaded', () => {
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const today = new Date();
+      document.getElementById('current-date').textContent = today.toLocaleDateString('id-ID', options);
+      
+      // Initialize sync button
+      document.getElementById('syncButton').addEventListener('click', manualSync);
+      
+      // Initialize export button
+      document.getElementById('exportButton').addEventListener('click', exportToExcel);
+      
+      // Initialize search input
+      document.getElementById('searchInput').addEventListener('input', searchTable);
+      
+      // Initial data load
+      getDataFromSheet();
+    });
+
+    function updateLastSyncTime() {
+      const now = new Date();
+      lastSyncTime = now;
+      const timeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      const dateString = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      document.getElementById('last-sync').textContent = `Terakhir sinkron: ${timeString}, ${dateString}`;
+    }
+
+    function manualSync() {
+      const syncButton = document.getElementById('syncButton');
+      syncButton.classList.add('syncing');
+      getDataFromSheet();
+    }
+
+    async function getDataFromSheet() {
+      document.getElementById('loading').classList.remove('hidden');
+      try {
+        const response = await fetch(scriptURL);
+        allData = await response.json();
+        if (selectedMapel) {
+          filterByMapel(selectedMapel, allData);
+        } else {
+          createMapelButtons(allData);
+        }
+        updateLastSyncTime();
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        alert('Gagal mengambil data. Silakan coba lagi.');
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+        const syncButton = document.getElementById('syncButton');
+        syncButton.classList.remove('syncing');
+      }
+    }
+
+    function tampilkanTabel(data) {
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = '';
+
+      data.forEach(item => {
+        if (item.nama && item.nama !== '#N/A') {
+          const row = document.createElement('tr');
+          row.className = 'hover:bg-blue-50';
+          
+          const ruanganCell = document.createElement('td');
+          ruanganCell.className = 'py-3 px-4';
+          ruanganCell.textContent = item.ruangan;
+          
+          const kelasCell = document.createElement('td');
+          kelasCell.className = 'py-3 px-4';
+          kelasCell.textContent = item.kelas;
+          
+          const namaCell = document.createElement('td');
+          namaCell.className = 'py-3 px-4 font-medium';
+          namaCell.textContent = item.nama;
+          
+          const mapelCell = document.createElement('td');
+          mapelCell.className = 'py-3 px-4';
+          mapelCell.textContent = item.mapel;
+          
+          const nilaiCell = document.createElement('td');
+          nilaiCell.className = 'py-3 px-4';
+          
+          const nilai = parseFloat(item.nilai);
+          const nilaiSpan = document.createElement('span');
+          nilaiSpan.className = `px-2 py-1 rounded-full text-xs font-medium ${
+            nilai >= 80 ? 'bg-green-100 text-green-800' : 
+            nilai >= 75 ? 'bg-blue-100 text-blue-800' : 
+            nilai >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+          }`;
+          nilaiSpan.textContent = item.nilai;
+          nilaiCell.appendChild(nilaiSpan);
+          
+          row.appendChild(ruanganCell);
+          row.appendChild(kelasCell);
+          row.appendChild(namaCell);
+          row.appendChild(mapelCell);
+          row.appendChild(nilaiCell);
+          
+          tableBody.appendChild(row);
+        }
+      });
+    }
+
+    function createMapelButtons(data) {
+      const mapelSet = new Set();
+      data.forEach(item => {
+        if (item.mapel && item.mapel !== '#N/A') {
+          mapelSet.add(item.mapel);
+        }
+      });
+
+      const mapelButtonGroup = document.getElementById('mapelButtonGroup');
+      mapelButtonGroup.innerHTML = '';
+
+      // Add "All Subjects" button
+      const allButton = document.createElement('button');
+      allButton.className = 'filter-btn bg-blue-600 text-white px-4 py-2 rounded-lg';
+      allButton.textContent = 'Semua Mapel';
+      allButton.onclick = () => {
+        selectedMapel = null;
+        selectedRuangan = null;
+        document.getElementById('ruanganButtonGroup').style.display = 'none';
+        tampilkanTabel(allData.filter(item => item.nama && item.nama !== '#N/A'));
+        updateTotalParticipants(allData.filter(item => item.nama && item.nama !== '#N/A'));
+      };
+      mapelButtonGroup.appendChild(allButton);
+
+      Array.from(mapelSet).sort().forEach(mapel => {
+        const button = document.createElement('button');
+        button.className = 'filter-btn bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200';
+        button.textContent = mapel;
+        button.onclick = () => {
+          // Remove active class from all buttons
+          document.querySelectorAll('#mapelButtonGroup button').forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.remove('bg-blue-600', 'text-white');
+            btn.classList.add('bg-blue-100', 'text-blue-800');
+          });
+          
+          // Add active class to clicked button
+          button.classList.add('active');
+          button.classList.add('bg-blue-600', 'text-white');
+          button.classList.remove('bg-blue-100', 'text-blue-800');
+          
+          selectedMapel = mapel;
+          selectedRuangan = null;
+          filterByMapel(mapel, allData);
+        };
+        mapelButtonGroup.appendChild(button);
+      });
+    }
+
+    function filterByMapel(mapel, data) {
+      const filteredData = data.filter(item => item.mapel === mapel && item.nama && item.nama !== '#N/A');
+      filteredData.sort((a, b) => {
+        if (a.ruangan !== b.ruangan) return a.ruangan.localeCompare(b.ruangan);
+        if (a.kelas !== b.kelas) return a.kelas.localeCompare(b.kelas);
+        return a.nama.localeCompare(b.nama);
+      });
+      tampilkanTabel(filteredData);
+      createRuanganButtons(filteredData);
+      updateTotalParticipants(filteredData);
+    }
+
+    function createRuanganButtons(data) {
+      const ruanganSet = new Set();
+      data.forEach(item => {
+        if (item.ruangan && item.ruangan !== '#N/A') {
+          ruanganSet.add(item.ruangan);
+        }
+      });
+
+      const ruanganButtonGroup = document.getElementById('ruanganButtonGroup');
+      const ruanganButtonsContainer = document.getElementById('ruanganButtonsContainer');
+      ruanganButtonGroup.style.display = 'block';
+      ruanganButtonsContainer.innerHTML = '';
+
+      // Convert to array and sort rooms numerically (Ruang 01, Ruang 02, etc.)
+      const sortedRuangan = Array.from(ruanganSet).sort((a, b) => {
+        // Extract numbers from room names
+        const numA = parseInt(a.replace(/\D/g, ''));
+        const numB = parseInt(b.replace(/\D/g, ''));
+        return numA - numB;
+      });
+
+      // Add "All Rooms" button
+      const allButton = document.createElement('button');
+      allButton.className = 'filter-btn bg-blue-600 text-white px-4 py-2 rounded-lg';
+      allButton.textContent = 'Semua Ruangan';
+      allButton.onclick = () => {
+        selectedRuangan = null;
+        filterByMapel(selectedMapel, allData);
+      };
+      ruanganButtonsContainer.appendChild(allButton);
+
+      sortedRuangan.forEach(ruangan => {
+        const button = document.createElement('button');
+        button.className = 'filter-btn bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200';
+        button.textContent = ruangan;
+        button.onclick = () => {
+          // Remove active class from all buttons
+          document.querySelectorAll('#ruanganButtonsContainer button').forEach(btn => {
+            btn.classList.remove('active');
+            btn.classList.remove('bg-blue-600', 'text-white');
+            btn.classList.add('bg-blue-100', 'text-blue-800');
+          });
+          
+          // Add active class to clicked button
+          button.classList.add('active');
+          button.classList.add('bg-blue-600', 'text-white');
+          button.classList.remove('bg-blue-100', 'text-blue-800');
+          
+          selectedRuangan = ruangan;
+          filterByRuangan(ruangan, data);
+        };
+        ruanganButtonsContainer.appendChild(button);
+      });
+    }
+
+    function filterByRuangan(ruangan, data) {
+      const filteredData = data.filter(item => item.ruangan === ruangan && item.nama && item.nama !== '#N/A');
+      filteredData.sort((a, b) => {
+        if (a.kelas !== b.kelas) return a.kelas.localeCompare(b.kelas);
+        return a.nama.localeCompare(b.nama);
+      });
+      tampilkanTabel(filteredData);
+      updateTotalParticipants(filteredData);
+    }
+
+    function updateTotalParticipants(data) {
+      const ruanganCount = {};
+      const ruanganStats = document.getElementById('ruanganStats');
+      ruanganStats.innerHTML = '';
+
+      data.forEach(item => {
+        if (!ruanganCount[item.ruangan]) {
+          ruanganCount[item.ruangan] = 0;
+        }
+        ruanganCount[item.ruangan]++;
+      });
+
+      // Sort rooms numerically
+      const sortedRooms = Object.keys(ruanganCount).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''));
+        const numB = parseInt(b.replace(/\D/g, ''));
+        return numA - numB;
+      });
+
+      sortedRooms.forEach(ruangan => {
+        const totalPeserta = ruanganCount[ruangan];
+        const target = ruangan.includes('15') ? 10 : 20; // Assuming Ruang 15 has target 10
+        
+        const statCard = document.createElement('div');
+        statCard.className = 'bg-white rounded-lg shadow p-4';
+        
+        const roomName = document.createElement('h3');
+        roomName.className = 'text-lg font-semibold text-gray-800 mb-1';
+        roomName.textContent = ruangan;
+        
+        const participantCount = document.createElement('p');
+        participantCount.className = 'text-2xl font-bold mb-1';
+        participantCount.textContent = totalPeserta;
+        
+        const targetInfo = document.createElement('p');
+        targetInfo.className = 'text-sm';
+        targetInfo.innerHTML = `<span class="text-gray-600">Target:</span> <span class="font-medium">${target}</span>`;
+        
+        const progressBarContainer = document.createElement('div');
+        progressBarContainer.className = 'w-full bg-gray-200 rounded-full h-2.5 mt-2';
+        
+        const progressPercentage = Math.min((totalPeserta / target) * 100, 100);
+        const progressBar = document.createElement('div');
+        progressBar.className = `h-2.5 rounded-full ${
+          progressPercentage >= 100 ? 'bg-green-500' : 
+          progressPercentage >= 80 ? 'bg-blue-500' : 
+          progressPercentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+        }`;
+        progressBar.style.width = `${progressPercentage}%`;
+        
+        progressBarContainer.appendChild(progressBar);
+        
+        statCard.appendChild(roomName);
+        statCard.appendChild(participantCount);
+        statCard.appendChild(targetInfo);
+        statCard.appendChild(progressBarContainer);
+        
+        ruanganStats.appendChild(statCard);
+      });
+    }
+
+    function searchTable() {
+      const input = document.getElementById('searchInput').value.toLowerCase();
+      const rows = document.querySelectorAll('#rekapTable tbody tr');
+
+      rows.forEach(row => {
+        const nama = row.cells[2].textContent.toLowerCase();
+        row.style.display = nama.includes(input) ? '' : 'none';
+      });
+    }
+
+    function exportToExcel() {
+      // Prepare data for export
+      let exportData;
+      
+      if (selectedMapel && selectedRuangan) {
+        exportData = allData.filter(item => 
+          item.mapel === selectedMapel && 
+          item.ruangan === selectedRuangan &&
+          item.nama && item.nama !== '#N/A'
+        );
+      } else if (selectedMapel) {
+        exportData = allData.filter(item => 
+          item.mapel === selectedMapel && 
+          item.nama && item.nama !== '#N/A'
+        );
+      } else {
+        exportData = allData.filter(item => item.nama && item.nama !== '#N/A');
+      }
+      
+      // Format data for Excel
+      const formattedData = exportData.map(item => ({
+        'Ruangan': item.ruangan,
+        'Kelas': item.kelas,
+        'Nama': item.nama,
+        'Mata Pelajaran': item.mapel,
+        'Nilai': item.nilai
+      }));
+      
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(formattedData);
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap Nilai");
+      
+      // Generate filename with timestamp
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-');
+      const filename = `Rekap_Nilai_${timestamp}.xlsx`;
+      
+      // Export to Excel
+      XLSX.writeFile(wb, filename);
+    }
+
+    window.onload = () => {
+      getDataFromSheet();
+
+      setInterval(() => {
+        getDataFromSheet();
+      }, 300000); // 5 menit = 300000 ms
+    };
+  </script>
+</body>
+</html>
