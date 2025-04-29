@@ -114,6 +114,20 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
+
+    .stat-card {
+      transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card.active {
+      border: 2px solid #3b82f6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -186,6 +200,14 @@
         <div class="button-group flex flex-wrap gap-2" id="ruanganButtonsContainer"></div>
       </div>
 
+      <!-- Total Participants - Now shown after selecting room -->
+      <div id="totalParticipants" class="bg-white rounded-xl shadow-md p-6 mb-6" style="display: none;">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+          <i class="fas fa-users mr-2 text-blue-500"></i> Rekap Peserta per Ruangan
+        </h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="ruanganStats"></div>
+      </div>
+
       <!-- Search Box -->
       <div class="bg-white rounded-xl shadow-md p-4 mb-6">
         <div class="max-w-md mx-auto relative">
@@ -213,14 +235,6 @@
             <tbody id="tableBody" class="divide-y divide-gray-200"></tbody>
           </table>
         </div>
-      </div>
-
-      <!-- Total Participants -->
-      <div id="totalParticipants" class="bg-white rounded-xl shadow-md p-6">
-        <h2 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-          <i class="fas fa-users mr-2 text-blue-500"></i> Rekap Peserta per Ruangan
-        </h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="ruanganStats"></div>
       </div>
     </div>
   </main>
@@ -364,19 +378,6 @@
       const mapelButtonGroup = document.getElementById('mapelButtonGroup');
       mapelButtonGroup.innerHTML = '';
 
-      // Add "All Subjects" button
-      const allButton = document.createElement('button');
-      allButton.className = 'filter-btn bg-blue-600 text-white px-4 py-2 rounded-lg';
-      allButton.textContent = 'Semua Mapel';
-      allButton.onclick = () => {
-        selectedMapel = null;
-        selectedRuangan = null;
-        document.getElementById('ruanganButtonGroup').style.display = 'none';
-        tampilkanTabel(allData.filter(item => item.nama && item.nama !== '#N/A'));
-        updateTotalParticipants(allData.filter(item => item.nama && item.nama !== '#N/A'));
-      };
-      mapelButtonGroup.appendChild(allButton);
-
       Array.from(mapelSet).sort().forEach(mapel => {
         const button = document.createElement('button');
         button.className = 'filter-btn bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200';
@@ -396,7 +397,7 @@
           
           selectedMapel = mapel;
           selectedRuangan = null;
-          filterByMapel(mapel, allData);
+          filterByMapel(mapel, data);
         };
         mapelButtonGroup.appendChild(button);
       });
@@ -411,7 +412,8 @@
       });
       tampilkanTabel(filteredData);
       createRuanganButtons(filteredData);
-      updateTotalParticipants(filteredData);
+      document.getElementById('totalParticipants').style.display = 'none';
+      document.getElementById('ruanganButtonGroup').style.display = 'block';
     }
 
     function createRuanganButtons(data) {
@@ -434,16 +436,6 @@
         const numB = parseInt(b.replace(/\D/g, ''));
         return numA - numB;
       });
-
-      // Add "All Rooms" button
-      const allButton = document.createElement('button');
-      allButton.className = 'filter-btn bg-blue-600 text-white px-4 py-2 rounded-lg';
-      allButton.textContent = 'Semua Ruangan';
-      allButton.onclick = () => {
-        selectedRuangan = null;
-        filterByMapel(selectedMapel, allData);
-      };
-      ruanganButtonsContainer.appendChild(allButton);
 
       sortedRuangan.forEach(ruangan => {
         const button = document.createElement('button');
@@ -503,7 +495,9 @@
         const target = ruangan.includes('15') ? 10 : 20; // Assuming Ruang 15 has target 10
         
         const statCard = document.createElement('div');
-        statCard.className = 'bg-white rounded-lg shadow p-4';
+        statCard.className = `stat-card bg-white rounded-lg shadow p-4 ${
+          selectedRuangan === ruangan ? 'active' : ''
+        }`;
         
         const roomName = document.createElement('h3');
         roomName.className = 'text-lg font-semibold text-gray-800 mb-1';
@@ -538,6 +532,9 @@
         
         ruanganStats.appendChild(statCard);
       });
+
+      // Show the total participants section after selecting a room
+      document.getElementById('totalParticipants').style.display = 'block';
     }
 
     function searchTable() {
